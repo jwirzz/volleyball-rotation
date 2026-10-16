@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Volley Läufer</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        --panel: rgba(16, 27, 44, 0.84);
+        --knopf: rgba(255, 255, 255, 0.09);
+        --knopf-hover: rgba(255, 255, 255, 0.18);
+        --akzent: #f0a24a;
+        --annahme: #1f57b8;
+        --aufschlag: #c0392b;
+        --text-leise: rgba(255, 255, 255, 0.65);
+        --rand: 12px;
+      }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #3f73a3; color: #fff;
+        font: 14px/1.3 system-ui, -apple-system, sans-serif; }
+      #view3d { position: fixed; inset: 0; touch-action: none; }
+
+      .panel { display: flex; gap: 12px; align-items: center; padding: 12px 14px;
+        background: var(--panel); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25); }
+      .panel[hidden] { display: none; }
+      #kopf { position: fixed; z-index: 2; top: max(var(--rand), env(safe-area-inset-top)); left: max(var(--rand), env(safe-area-inset-left));
+        flex-direction: column; align-items: stretch; gap: 10px; }
+      #werkzeug { position: fixed; z-index: 2; top: max(var(--rand), env(safe-area-inset-top)); right: max(var(--rand), env(safe-area-inset-right)); }
+      #unten { position: fixed; z-index: 2; left: var(--rand); right: var(--rand); bottom: max(var(--rand), env(safe-area-inset-bottom));
+        display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+      #unten > * { pointer-events: auto; }
+      #player, #editor { flex-wrap: wrap; justify-content: center; max-width: 100%; }
+
+      h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.2px; user-select: none; }
+      .label { color: var(--text-leise); font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; }
+      .zeile { display: flex; gap: 8px; align-items: center; }
+
+      button, select { white-space: nowrap; background: var(--knopf); color: #fff; border: 0; border-radius: 9px; padding: 8px 12px;
+        font: inherit; font-weight: 500; cursor: pointer; transition: background 0.15s; }
+      button:hover, select:hover { background: var(--knopf-hover); }
+      button[hidden] { display: none; }
+      option { color: #111; }
+      button.on { background: var(--akzent); color: #1b1b1b; font-weight: 700; }
+      button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--akzent); outline-offset: 2px; }
+      .haupt { background: var(--akzent); color: #1b1b1b; font-weight: 700; }
+      .haupt:hover { background: #f5b56a; }
+
+      /* Ein/Aus-Schalter (Checkbox als Schiebeschalter) */
+      .schalter { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 9px;
+        font-weight: 500; cursor: pointer; user-select: none; white-space: nowrap; }
+      .schalter:hover { background: var(--knopf); }
+      .schalter input { appearance: none; -webkit-appearance: none; position: relative; flex: none; margin: 0;
+        width: 38px; height: 22px; border-radius: 11px; background: rgba(255, 255, 255, 0.22); cursor: pointer; transition: background 0.15s; }
+      .schalter input::before { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
+        border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #0006; transition: transform 0.15s; }
+      .schalter input:checked { background: var(--akzent); }
+      .schalter input:checked::before { transform: translateX(16px); }
+      #libero:checked { background: #8e44ad; } /* Farbe vom Libero-Trikot */
+
+      /* Läufer-Knöpfe wie die Kreise auf den Blättern */
+      .chips { display: flex; gap: 6px; }
+      .chips button { width: 36px; height: 36px; padding: 0; border-radius: 50%; font-weight: 700;
+        border: 2px solid rgba(255, 255, 255, 0.35); background: transparent; }
+      .chips button.on { background: #fff; color: #1b1b1b; border-color: #fff; }
+
+      /* Umschalter aus mehreren Knöpfen */
+      .seg { display: flex; background: rgba(0, 0, 0, 0.25); border-radius: 10px; padding: 3px; gap: 2px; }
+      .seg button { background: transparent; border-radius: 8px; }
+      .seg button.on { background: #fff; color: #1b1b1b; }
+      #situation { flex: 1; }
+      #situation button { flex: 1; padding: 9px 14px; }
+      #situation button[data-sit='annahme'].on { background: var(--annahme); color: #fff; }
+      #situation button[data-sit='aufschlag'].on { background: var(--aufschlag); color: #fff; }
+
+      #play { width: 46px; height: 46px; padding: 0; border-radius: 50%; font-size: 18px; flex: none; }
+      #zeitleiste { position: relative; width: 380px; padding-bottom: 22px; }
+      #time { width: 100%; accent-color: var(--akzent); margin: 0; }
+      #marken { position: absolute; left: 7px; right: 7px; top: 22px; height: 18px; }
+      .marke { position: absolute; transform: translateX(-50%); padding: 1px 6px; font-size: 11px; border-radius: 6px;
+        background: transparent; color: var(--text-leise); white-space: nowrap; }
+      .marke:first-child { transform: none; }
+      .marke:last-child { transform: translateX(-100%); }
+      .marke.on { color: #fff; font-weight: 700; background: transparent; }
+
+      input[type='number'] { width: 64px; background: #fff; color: #111; border: 0; border-radius: 8px; padding: 7px; font: inherit; }
+      .hint, #status { color: var(--text-leise); font-size: 13px; }
+
+      #title { position: fixed; top: 38%; left: 0; right: 0; text-align: center; font-size: 44px; font-weight: 800;
+        text-shadow: 0 2px 14px #0009; pointer-events: none; opacity: 0; transition: opacity 0.4s; z-index: 1; }
+      #title.show { opacity: 1; }
+      .lbl { padding: 2px 7px; border-radius: 10px; font-size: 12px; font-weight: 600; white-space: nowrap;
+        border: 1.5px solid #fff; pointer-events: auto; cursor: pointer; }
+
+      /* Handy / schmale Fenster: Leisten oben und unten über die ganze Breite */
+      @media (max-width: 820px) {
+        :root { --rand: 8px; }
+        body { font-size: 13px; }
+        .panel { padding: 9px 10px; gap: 8px; border-radius: 12px; }
+        #kopf { right: max(var(--rand), env(safe-area-inset-right)); gap: 8px; }
+        h1 { font-size: 16px; }
+        .chips { gap: 5px; }
+        .chips button { width: 34px; height: 34px; }
+        #werkzeug { position: static; width: 100%; justify-content: space-between; flex-wrap: wrap; }
+        #werkzeug select { flex: 1 1 0; min-width: 96px; }
+        .seg button { padding: 7px 9px; }
+        .schalter { padding: 2px 4px; gap: 5px; }
+        #player, #editor { width: 100%; }
+        #zeitleiste { flex: 1 1 200px; width: auto; }
+        .marke { font-size: 10px; padding: 1px 3px; }
+        button, select { padding: 7px 10px; }
+        #situation button { padding: 8px 10px; }
+        .hint, #editor .zeile:first-child > .label { display: none; }
+        #editor .zeile { flex-wrap: wrap; justify-content: center; }
+        body.edit #werkzeug { display: none; }
+        #title { font-size: 26px; }
+        .lbl { font-size: 10px; padding: 1px 5px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="view3d"></div>
+
+    <header id="kopf" class="panel">
+      <h1 id="ueberschrift">Läufer 1 · Annahme</h1>
+      <div class="zeile"><span class="label">Läufer</span><div id="laeufer" class="chips"></div></div>
+      <div class="zeile">
+        <div id="situation" class="seg">
+          <button data-sit="annahme" title="Wir nehmen den Aufschlag an">Annahme</button>
+          <button data-sit="aufschlag" title="Wir schlagen auf">Aufschlag</button>
+        </div>
+        <label class="schalter" title="Libero spielt hinten für den Mitte (ausser der Mitte schlägt auf)">
+          <input id="libero" type="checkbox" role="switch" checked /> Libero
+        </label>
+      </div>
+    </header>
+
+    <div id="unten">
+      <nav id="werkzeug" class="panel">
+        <div class="seg">
+          <button data-ansicht="3d">3D</button>
+          <button data-ansicht="oben">Von oben</button>
+        </div>
+        <label class="schalter" title="Laufwege und Ballbahn ein/aus">
+          <input id="paths" type="checkbox" role="switch" checked /> Laufwege
+        </label>
+        <select id="fokus" title="Einen Spieler hervorheben (oder auf einen Spieler tippen)" aria-label="Fokus">
+          <option value="">Fokus: alle</option>
+        </select>
+        <button id="edit" title="Positionen verschieben" hidden>✎ Bearbeiten</button>
+      </nav>
+
+      <footer id="player" class="panel">
+        <button id="play" class="haupt" title="Abspielen / Pause (Leertaste)">▶</button>
+        <div id="zeitleiste">
+          <input id="time" type="range" min="0" max="1000" value="0" aria-label="Zeitleiste" />
+          <div id="marken"></div>
+        </div>
+        <div id="tempo" class="seg" title="Tempo">
+          <button data-tempo="0.5">½×</button>
+          <button data-tempo="1" class="on">1×</button>
+          <button data-tempo="2">2×</button>
+        </div>
+        <button id="tour" title="Alle Läufer nacheinander: 1, 6, 5, 4, 3, 2 – jeweils Annahme, dann Aufschlag">▶▶ Durchlauf</button>
+      </footer>
+
+      <footer id="editor" class="panel" hidden>
+        <div class="zeile">
+          <span class="label">Schritt</span>
+          <div id="steps" class="seg"></div>
+          <button id="add" title="Neuen Schritt nach diesem einfügen">+</button>
+          <button id="del" title="Diesen Schritt löschen">−</button>
+        </div>
+        <label class="zeile"><span class="label">Ballhöhe</span><input id="bh" type="number" step="0.1" min="0" /> m</label>
+        <span class="hint">Spieler oder Ball ziehen</span>
+        <span id="status"></span>
+        <button id="download" class="haupt" title="laeufer.json speichern und im Projekt unter public/ ersetzen">⬇ JSON herunterladen</button>
+        <button id="fertig">Fertig</button>
+      </footer>
+    </div>
+
+    <div id="title"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
